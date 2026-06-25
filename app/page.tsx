@@ -14,7 +14,7 @@ type View =
 
 export default function Home() {
   const [view, setView] = useState<View>({ kind: "idle" });
-  const [initialCompany, setInitialCompany] = useState("Lockheed Martin");
+  const [initialCompany, setInitialCompany] = useState("");
   const cardRef = useRef<HTMLDivElement>(null);
   const didInitialLoad = useRef(false);
 
@@ -35,14 +35,17 @@ export default function Home() {
     }
   }, []);
 
-  // Default / deep-link load on first paint. The ref guard prevents React StrictMode's
-  // double-mount (dev) from firing two receipt fetches.
+  // Deep-link load on first paint: only auto-search when a ?c= company is in the URL.
+  // Otherwise we stay idle and show the explainer blurb. The ref guard prevents React
+  // StrictMode's double-mount (dev) from firing two receipt fetches.
   useEffect(() => {
     if (didInitialLoad.current) return;
     didInitialLoad.current = true;
-    const c = new URLSearchParams(window.location.search).get("c") ?? "Lockheed Martin";
-    setInitialCompany(c);
-    void search(c);
+    const c = new URLSearchParams(window.location.search).get("c");
+    if (c) {
+      setInitialCompany(c);
+      void search(c);
+    }
   }, [search]);
 
   async function saveReceipt() {
@@ -64,6 +67,22 @@ export default function Home() {
       <p className="tagline">How federally fed is your favorite company?</p>
 
       <SearchBox onSearch={search} loading={view.kind === "loading"} initial={initialCompany} />
+
+      {view.kind === "idle" && (
+        <section className="intro">
+          <p>
+            Every year, Uncle Sam hands out <strong>trillions</strong> in federal contracts —
+            for fighter jets, cloud servers, paperclips, you name it. A lot of household-name
+            companies quietly earn a big slice of their income straight from your tax dollars.
+          </p>
+          <p>
+            Type a company above and we&apos;ll print a tongue-in-cheek <em>taxpayer receipt</em>:
+            how much it rakes in from federal contracts, how that stacks up against its total
+            revenue, and just how <strong>federally fed</strong> it really is.
+          </p>
+          <p className="introHint">Try Lockheed Martin, Palantir, or Booz Allen Hamilton →</p>
+        </section>
+      )}
 
       {view.kind === "loading" && <p className="status">Tallying the tab…</p>}
       {view.kind === "error" && <p className="status error">{view.message}</p>}
