@@ -7,7 +7,7 @@ describe("Receipt", () => {
   it("renders the company, hero contract figure, eyebrow and stamp", () => {
     render(<Receipt data={LOCKHEED_SEED} />);
     expect(screen.getByText("Lockheed Martin")).toBeInTheDocument();
-    expect(screen.getAllByText("$14.1B").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("$14.1B")).toHaveLength(2);
     expect(screen.getByText(/On the federal diet/i)).toBeInTheDocument();
     expect(screen.getByText("FEDERALLY FED")).toBeInTheDocument();
     expect(screen.getByText(/FY2025/)).toBeInTheDocument();
@@ -17,6 +17,7 @@ describe("Receipt", () => {
   it("hides the stamp for private companies", () => {
     render(<Receipt data={{ ...LOCKHEED_SEED, isPrivate: true, revenue: null, federallyFed: null, perDollar: null }} />);
     expect(screen.queryByText("FEDERALLY FED")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Of every \$1 of/i)).not.toBeInTheDocument();
   });
 
   it("renders the celebratory no-contracts variant", () => {
