@@ -1,5 +1,13 @@
 import { TAKO_SEARCH_URL, TAKO_ANSWER_URL, TAKO_DEBUG } from "@/lib/constants";
-import type { Candidate, SeriesTimeline, TakoClient, TakoSearchResult, TakoSource } from "./types";
+import type {
+  Candidate,
+  SearchOptions,
+  SeriesPoint,
+  SeriesTimeline,
+  TakoClient,
+  TakoSearchResult,
+  TakoSource,
+} from "./types";
 
 // --- Real Tako v3 search response shape (docs.tako.com/api-reference/search-v3) ---
 // { cards: [ { card_id, title, description, embed_url, sources: [{source_name}],
@@ -132,6 +140,51 @@ export function extractValueFromContent(content: RawContent | undefined): {
   return { value, candidates: nums };
 }
 
+// Parse the underlying CSV series (present only when include_contents was requested)
+// into annual points. Tolerant of column order: the first date-like cell gives the
+// year, the last numeric non-date cell gives the value.
+export function parseCsvSeries(content: RawContent | undefined): SeriesPoint[] {
+  const data = content?.data;
+  if (!data || typeof data !== "string") return [];
+  const rows = data.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+  if (rows.length < 2) return [];
+  const points: SeriesPoint[] = [];
+  for (const row of rows.slice(1)) {
+    const cells = row.split(",").map((c) => c.trim());
+    let year: number | null = null;
+    let dateStr = "";
+    for (const cell of cells) {
+      const ym = cell.match(/\b(?:19|20)\d{2}\b/);
+      if (ym) {
+        year = parseInt(ym[0], 10);
+        dateStr = cell;
+        break;
+      }
+    }
+    let value: number | null = null;
+    for (let i = cells.length - 1; i >= 0; i--) {
+      if (cells[i] === dateStr) continue;
+      const v = parseMagnitude(cells[i]);
+      if (v !== null) {
+        value = v;
+        break;
+      }
+    }
+    if (year !== null && value !== null) points.push({ date: dateStr, year, value });
+  }
+  return points;
+}
+
+// Parse a market capitalization out of a stock card description, e.g.
+// "...Current market cap is $113.35B."
+export function parseMarketCap(desc: string | undefined | null): number | null {
+  if (!desc || typeof desc !== "string") return null;
+  const m = desc.match(
+    /market cap(?:italization)?\s+(?:is|of|:)?\s*(\$?[\d.,]+\s*(?:trillion|billion|million|thousand|t|tn|bn|b|mn|m|k)?)/i,
+  );
+  return m ? parseMagnitude(m[1]) : null;
+}
+
 export function parseSearchResponse(json: unknown): TakoSearchResult {
   const cards = (json as { cards?: RawCard[] })?.cards ?? [];
   const top = cards[0];
@@ -140,12 +193,14 @@ export function parseSearchResponse(json: unknown): TakoSearchResult {
   const fromDesc = parseSeriesDescription(top?.description);
   const fromContent = extractValueFromContent(top?.content);
   const value = fromDesc.latest ?? fromContent.value;
+  const series = parseCsvSeries(top?.content);
 
   logTako(
     "parsed search:",
     `cards=${cards.length}`,
     `topTitle=${JSON.stringify(top?.title ?? null)}`,
     `value=${value}`,
+    `seriesPoints=${series.length}`,
     `timeline=${JSON.stringify(fromDesc.timeline)}`,
     `(content.data=${top?.content?.data == null ? "null" : "present"})`,
   );
@@ -161,6 +216,8 @@ export function parseSearchResponse(json: unknown): TakoSearchResult {
     matched: null,
     candidates,
     timeline: fromDesc.timeline,
+    series,
+    description: top?.description ?? null,
   };
 }
 
@@ -181,14 +238,22 @@ export class HttpTakoClient implements TakoClient {
     return { "Content-Type": "application/json", "X-API-Key": this.apiKey };
   }
 
-  async searchValue(query: string): Promise<TakoSearchResult> {
-    const empty: TakoSearchResult = { value: null, embedUrl: null, matched: null, candidates: [], timeline: null };
+  async searchValue(query: string, options: SearchOptions = {}): Promise<TakoSearchResult> {
+    const empty: TakoSearchResult = {
+      value: null, embedUrl: null, matched: null, candidates: [], timeline: null, series: [], description: null,
+    };
     try {
-      logTako("search →", TAKO_SEARCH_URL, JSON.stringify({ query }));
+      // include_contents asks Tako to inline the CSV series (content.data), which we
+      // need to pick the latest COMPLETE fiscal year rather than the partial latest point.
+      const body: Record<string, unknown> = { query, effort: "fast" };
+      if (options.includeContents) {
+        body.sources = { tako: { include_contents: true }, web: {} };
+      }
+      logTako("search →", TAKO_SEARCH_URL, JSON.stringify(body));
       const res = await this.fetchImpl(TAKO_SEARCH_URL, {
         method: "POST",
         headers: this.headers(),
-        body: JSON.stringify({ query, effort: "fast" }),
+        body: JSON.stringify(body),
       });
       const raw = await res.text();
       if (!res.ok) {

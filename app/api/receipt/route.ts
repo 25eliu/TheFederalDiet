@@ -18,7 +18,7 @@ function errorReceipt(company: string, message: string): ReceiptData {
   return {
     status: "error", company, fiscalYear: FISCAL_YEAR, receiptNo: "0000", isPrivate: false,
     contracts: null, totalFederalContracts: null, revenue: null, netIncome: null,
-    stockChange1y: null, rank: null, shareOfFederal: null, federallyFed: null,
+    marketCap: null, shareOfFederal: null, federallyFed: null,
     perHundred: null, perDollar: null, explanation: null, takoEmbedUrl: null,
     contractTimeline: null, candidates: [], error: message,
   };

@@ -16,6 +16,7 @@ export default function Home() {
   const [view, setView] = useState<View>({ kind: "idle" });
   const [initialCompany, setInitialCompany] = useState("Lockheed Martin");
   const cardRef = useRef<HTMLDivElement>(null);
+  const didInitialLoad = useRef(false);
 
   const search = useCallback(async (company: string) => {
     setView({ kind: "loading" });
@@ -34,8 +35,11 @@ export default function Home() {
     }
   }, []);
 
-  // Default / deep-link load on first paint.
+  // Default / deep-link load on first paint. The ref guard prevents React StrictMode's
+  // double-mount (dev) from firing two receipt fetches.
   useEffect(() => {
+    if (didInitialLoad.current) return;
+    didInitialLoad.current = true;
     const c = new URLSearchParams(window.location.search).get("c") ?? "Lockheed Martin";
     setInitialCompany(c);
     void search(c);

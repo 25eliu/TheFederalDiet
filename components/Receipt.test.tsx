@@ -7,11 +7,19 @@ describe("Receipt", () => {
   it("renders the company, hero contract figure, eyebrow and stamp", () => {
     render(<Receipt data={LOCKHEED_SEED} />);
     expect(screen.getByText("Lockheed Martin")).toBeInTheDocument();
-    expect(screen.getAllByText("$14.1B")).toHaveLength(2);
+    // Contract figure appears in both the hero and the Federal Contracts column.
+    expect(screen.getAllByText("$50.5B")).toHaveLength(2);
     expect(screen.getByText(/On the federal diet/i)).toBeInTheDocument();
     expect(screen.getByText("FEDERALLY FED")).toBeInTheDocument();
     expect(screen.getByText(/FY2025/)).toBeInTheDocument();
     expect(screen.getByText(/figures = obligations/i)).toBeInTheDocument();
+  });
+
+  it("shows market cap and no rank/stock row in Company Health", () => {
+    render(<Receipt data={LOCKHEED_SEED} />);
+    expect(screen.getByText("Market cap")).toBeInTheDocument();
+    expect(screen.queryByText("Rank")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Stock 1-yr/i)).not.toBeInTheDocument();
   });
 
   it("renders the contract timeline (start–end years + peak)", () => {

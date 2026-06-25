@@ -13,8 +13,7 @@ export interface ReceiptData {
   totalFederalContracts: number | null;
   revenue: number | null;
   netIncome: number | null;
-  stockChange1y: number | null;
-  rank: number | null;
+  marketCap: number | null;
 
   shareOfFederal: number | null;
   federallyFed: number | null;

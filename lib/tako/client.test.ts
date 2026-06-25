@@ -6,6 +6,8 @@ import {
   parseMagnitude,
   extractValueFromContent,
   parseSeriesDescription,
+  parseCsvSeries,
+  parseMarketCap,
 } from "./client";
 
 // The exact description string Tako returned for Lockheed (from production logs).
@@ -44,6 +46,35 @@ describe("extractValueFromContent", () => {
   it("returns null when content is missing or empty", () => {
     expect(extractValueFromContent(undefined).value).toBeNull();
     expect(extractValueFromContent({ format: "csv", data: "" }).value).toBeNull();
+  });
+});
+
+describe("parseCsvSeries", () => {
+  it("parses date+value rows into annual points (date col first)", () => {
+    const content = { format: "csv", data: "date,obligations\n2023-10-01,40000000000\n2024-10-01,50500000000" };
+    const pts = parseCsvSeries(content);
+    expect(pts).toEqual([
+      { date: "2023-10-01", year: 2023, value: 40e9 },
+      { date: "2024-10-01", year: 2024, value: 50.5e9 },
+    ]);
+  });
+  it("is tolerant of magnitude-suffixed values and value-first columns", () => {
+    const content = { format: "csv", data: "value,year\n$14.1B,2025" };
+    expect(parseCsvSeries(content)).toEqual([{ date: "2025", year: 2025, value: 14.1e9 }]);
+  });
+  it("returns [] when content.data is null/empty", () => {
+    expect(parseCsvSeries({ format: "csv", data: null })).toEqual([]);
+    expect(parseCsvSeries(undefined)).toEqual([]);
+  });
+});
+
+describe("parseMarketCap", () => {
+  it("extracts market cap from a stock card description", () => {
+    expect(parseMarketCap("Lockheed Martin stock price is $493.70. Current market cap is $113.35B.")).toBe(113.35e9);
+  });
+  it("returns null when absent", () => {
+    expect(parseMarketCap("no cap here")).toBeNull();
+    expect(parseMarketCap(null)).toBeNull();
   });
 });
 

@@ -82,11 +82,38 @@ function parseDescription(desc) {
 }
 const trunc = (s, n = 500) => (s.length > n ? `${s.slice(0, n)} …(${s.length} chars)` : s);
 
-async function search(query) {
+// Parse the underlying CSV series (mirrors lib/tako/client.ts parseCsvSeries).
+function parseCsvSeries(content) {
+  const data = content?.data;
+  if (!data || typeof data !== "string") return [];
+  const rows = data.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+  if (rows.length < 2) return [];
+  const pts = [];
+  for (const row of rows.slice(1)) {
+    const cells = row.split(",").map((c) => c.trim());
+    let year = null, dateStr = "";
+    for (const cell of cells) {
+      const ym = cell.match(/\b(?:19|20)\d{2}\b/);
+      if (ym) { year = parseInt(ym[0], 10); dateStr = cell; break; }
+    }
+    let value = null;
+    for (let i = cells.length - 1; i >= 0; i--) {
+      if (cells[i] === dateStr) continue;
+      const v = parseMagnitude(cells[i]);
+      if (v !== null) { value = v; break; }
+    }
+    if (year !== null && value !== null) pts.push({ date: dateStr, year, value });
+  }
+  return pts;
+}
+
+async function search(query, includeContents = false) {
+  const body = { query, effort: "fast" };
+  if (includeContents) body.sources = { tako: { include_contents: true }, web: {} };
   const res = await fetch(SEARCH_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
-    body: JSON.stringify({ query, effort: "fast" }),
+    body: JSON.stringify(body),
   });
   const text = await res.text();
   let json = null;
@@ -103,26 +130,41 @@ async function main() {
     for (const w of WORDINGS) {
       const query = w(company);
       try {
-        const { status, ok, json, text } = await search(query);
+        // Request the underlying CSV series so we can see per-fiscal-year values.
+        const { status, ok, json, text } = await search(query, true);
         if (!ok) {
           console.log(`  [${status}] "${query}"\n     ERROR: ${trunc(text, 300)}`);
           continue;
         }
         const cards = json?.cards ?? [];
         const top = cards[0];
-        // For chart cards the figure is in the prose `description` (content.data is null).
         const fromDesc = parseDescription(top?.description);
+        const series = parseCsvSeries(top?.content);
         const fromContent = extractValue(top?.content);
         const value = fromDesc.latest ?? fromContent;
         console.log(`  [${status}] "${query}"`);
         console.log(`     cards=${cards.length}  topTitle=${JSON.stringify(top?.title ?? null)}`);
-        console.log(`     content.data=${top?.content?.data == null ? "null" : "present"}  → value=${value}  timeline=${JSON.stringify(fromDesc.timeline)}`);
-        if (top?.description) console.log(`     description=${trunc(String(top.description), 400)}`);
+        console.log(`     descLatest=${value}  timeline=${JSON.stringify(fromDesc.timeline)}  content.data=${top?.content?.data == null ? "null" : "present"}`);
+        if (series.length) {
+          console.log(`     series (${series.length} pts): ${series.map((p) => `${p.date}=${p.value}`).join("  ")}`);
+        }
+        if (top?.content?.data) console.log(`     content.data=${trunc(String(top.content.data), 400)}`);
         if (top?.embed_url) console.log(`     embed_url=${top.embed_url}`);
       } catch (e) {
         console.log(`  THREW for "${query}": ${e?.message ?? e}`);
       }
     }
+  }
+
+  // Market-cap check (Company Health stat) for the first company.
+  console.log(`\n--- market cap (${COMPANIES[0]}) ---`);
+  try {
+    const { status, json } = await search(`${COMPANIES[0]} stock market cap`);
+    const desc = json?.cards?.[0]?.description ?? "";
+    const m = desc.match(/market cap(?:italization)?\s+(?:is|of|:)?\s*(\$?[\d.,]+\s*(?:trillion|billion|million|thousand|t|tn|bn|b|mn|m|k)?)/i);
+    console.log(`  [${status}] marketCap=${m ? parseMagnitude(m[1]) : null}  desc=${trunc(String(desc), 200)}`);
+  } catch (e) {
+    console.log(`  market cap THREW: ${e?.message ?? e}`);
   }
 
   // One answer-endpoint check.
