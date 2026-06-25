@@ -44,17 +44,17 @@ export async function buildReceipt(
 
   try {
     const contractRes = await client.searchValue(queries.contracts(company, fiscalYear));
-    base.candidates = contractRes.candidates;
-    base.takoEmbedUrl = contractRes.embedUrl;
+    const candidates = contractRes.candidates;
+    const takoEmbedUrl = contractRes.embedUrl;
     const matchedName = contractRes.matched ?? company;
 
     // No contract value found.
     if (contractRes.value === null || contractRes.value === 0) {
       // Ambiguous: several candidate entities but nothing resolved.
       if (contractRes.candidates.length > 1) {
-        return { ...base, status: "disambiguation" };
+        return { ...base, status: "disambiguation", candidates, takoEmbedUrl };
       }
-      return { ...base, status: "no-contracts" };
+      return { ...base, status: "no-contracts", candidates, takoEmbedUrl };
     }
 
     // Resolve the remaining figures in parallel.
@@ -86,6 +86,8 @@ export async function buildReceipt(
       perDollar: perDollar(fed),
       explanation,
       isPrivate: revenue.value === null,
+      candidates,
+      takoEmbedUrl,
     };
   } catch (e) {
     return { ...base, status: "error", error: e instanceof Error ? e.message : "unknown error" };
