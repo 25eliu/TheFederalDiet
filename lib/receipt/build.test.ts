@@ -58,7 +58,7 @@ describe("buildReceipt", () => {
       ],
       answer: "Data analytics for defense and civilian agencies.",
     };
-    const r = await buildReceipt("SecretCorp", new FakeTakoClient(script), 2025);
+    const r = await buildReceipt("Palantir", new FakeTakoClient(script), 2025);
     expect(r.status).toBe("result");
     expect(r.isPrivate).toBe(true);
     expect(r.federallyFed).toBeNull();
