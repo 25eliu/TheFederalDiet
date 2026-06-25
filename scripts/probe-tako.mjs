@@ -65,6 +65,21 @@ function extractValue(content) {
   const nums = tokens.map(parseMagnitude).filter((n) => n !== null);
   return nums.length ? Math.max(...nums) : null;
 }
+// Parse the prose description (mirrors lib/tako/client.ts parseSeriesDescription).
+function parseDescription(desc) {
+  if (!desc || typeof desc !== "string") return { latest: null, timeline: null };
+  const MONEY = String.raw`-?\$?-?[\d,]+(?:\.\d+)?\s*(?:trillion|billion|million|thousand|t|tn|bn|b|mn|m|k)?`;
+  const DATE = String.raw`[A-Za-z]+\.?\s+\d{1,2},?\s+(\d{4})`;
+  const latestM = desc.match(new RegExp(`latest value was\\s+(${MONEY})`, "i"));
+  const rangeM = desc.match(new RegExp(`between\\s+${DATE}\\s+and\\s+${DATE}`, "i"));
+  const maxM = desc.match(new RegExp(`maximum of\\s+(${MONEY})\\s+on\\s+${DATE}`, "i"));
+  const startYear = rangeM ? parseInt(rangeM[1], 10) : null;
+  const endYear = rangeM ? parseInt(rangeM[2], 10) : null;
+  const peak = maxM ? parseMagnitude(maxM[1]) : null;
+  const peakYear = maxM ? parseInt(maxM[2], 10) : null;
+  const timeline = startYear || endYear || peak ? { startYear, endYear, peak, peakYear } : null;
+  return { latest: latestM ? parseMagnitude(latestM[1]) : null, timeline };
+}
 const trunc = (s, n = 500) => (s.length > n ? `${s.slice(0, n)} …(${s.length} chars)` : s);
 
 async function search(query) {
@@ -95,11 +110,14 @@ async function main() {
         }
         const cards = json?.cards ?? [];
         const top = cards[0];
-        const value = extractValue(top?.content);
+        // For chart cards the figure is in the prose `description` (content.data is null).
+        const fromDesc = parseDescription(top?.description);
+        const fromContent = extractValue(top?.content);
+        const value = fromDesc.latest ?? fromContent;
         console.log(`  [${status}] "${query}"`);
         console.log(`     cards=${cards.length}  topTitle=${JSON.stringify(top?.title ?? null)}`);
-        console.log(`     content.format=${top?.content?.format ?? "none"}  → extracted value=${value}`);
-        if (top?.content?.data) console.log(`     content.data=${trunc(String(top.content.data))}`);
+        console.log(`     content.data=${top?.content?.data == null ? "null" : "present"}  → value=${value}  timeline=${JSON.stringify(fromDesc.timeline)}`);
+        if (top?.description) console.log(`     description=${trunc(String(top.description), 400)}`);
         if (top?.embed_url) console.log(`     embed_url=${top.embed_url}`);
       } catch (e) {
         console.log(`  THREW for "${query}": ${e?.message ?? e}`);

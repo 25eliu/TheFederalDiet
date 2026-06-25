@@ -7,7 +7,7 @@ function sample(company: string): ReceiptData {
     status: "result", company, fiscalYear: 2025, receiptNo: "0001", isPrivate: false,
     contracts: 1, totalFederalContracts: 2, revenue: 3, netIncome: 4, stockChange1y: 0.1,
     rank: 1, shareOfFederal: 0.5, federallyFed: 0.3, perHundred: 50, perDollar: 0.3,
-    explanation: null, takoEmbedUrl: null, candidates: [], error: null,
+    explanation: null, takoEmbedUrl: null, contractTimeline: null, candidates: [], error: null,
   };
 }
 

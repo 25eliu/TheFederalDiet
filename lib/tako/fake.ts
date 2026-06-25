@@ -6,7 +6,7 @@ export interface FakeScript {
   answer?: string | null;
 }
 
-const EMPTY: TakoSearchResult = { value: null, embedUrl: null, matched: null, candidates: [] };
+const EMPTY: TakoSearchResult = { value: null, embedUrl: null, matched: null, candidates: [], timeline: null };
 
 export class FakeTakoClient implements TakoClient {
   constructor(private readonly script: FakeScript) {}

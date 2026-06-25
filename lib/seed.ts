@@ -25,7 +25,8 @@ export const LOCKHEED_SEED: ReceiptData = {
   perHundred: perHundred(share),
   perDollar: perDollar(fed),
   explanation: "Mainly U.S. Department of Defense aircraft, missile, and space programs.",
-  takoEmbedUrl: "https://trytako.com",
+  takoEmbedUrl: "https://tako.com/embed/5SUQ1YgDQqNwXiuO9rjZ/",
+  contractTimeline: { startYear: 2007, endYear: 2025, peak: 76.1e9, peakYear: 2019 },
   candidates: [],
   error: null,
 };

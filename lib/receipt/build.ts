@@ -41,6 +41,7 @@ export async function buildReceipt(
     perDollar: null,
     explanation: null,
     takoEmbedUrl: null,
+    contractTimeline: null,
     candidates: [],
     error: null,
   };
@@ -74,6 +75,12 @@ export async function buildReceipt(
     const share = shareOfFederal(contracts, total.value);
     const fed = federallyFed(contracts, revenue.value);
 
+    // The stock search yields a "latest value" that is a price, not a 1-yr fraction.
+    // Only keep it if it reads as a plausible fractional change (|x| <= 1.5 ≈ ±150%);
+    // otherwise leave it unavailable rather than render a nonsense percentage.
+    const stockChange1y =
+      stock.value !== null && Math.abs(stock.value) <= 1.5 ? stock.value : null;
+
     return {
       ...base,
       company: matchedName,
@@ -81,7 +88,7 @@ export async function buildReceipt(
       totalFederalContracts: total.value,
       revenue: revenue.value,
       netIncome: netIncome.value,
-      stockChange1y: stock.value,
+      stockChange1y,
       rank: rank.value,
       shareOfFederal: share,
       federallyFed: fed,
@@ -89,6 +96,7 @@ export async function buildReceipt(
       perDollar: perDollar(fed),
       explanation,
       isPrivate: revenue.value === null,
+      contractTimeline: contractRes.timeline,
       candidates,
       takoEmbedUrl,
     };

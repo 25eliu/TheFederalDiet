@@ -20,7 +20,7 @@ function errorReceipt(company: string, message: string): ReceiptData {
     contracts: null, totalFederalContracts: null, revenue: null, netIncome: null,
     stockChange1y: null, rank: null, shareOfFederal: null, federallyFed: null,
     perHundred: null, perDollar: null, explanation: null, takoEmbedUrl: null,
-    candidates: [], error: message,
+    contractTimeline: null, candidates: [], error: message,
   };
 }
 

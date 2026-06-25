@@ -14,6 +14,17 @@ describe("Receipt", () => {
     expect(screen.getByText(/figures = obligations/i)).toBeInTheDocument();
   });
 
+  it("renders the contract timeline (start–end years + peak)", () => {
+    render(<Receipt data={LOCKHEED_SEED} />);
+    expect(screen.getByText(/tracked 2007–2025/i)).toBeInTheDocument();
+    expect(screen.getByText(/peak \$76\.1B in 2019/i)).toBeInTheDocument();
+  });
+
+  it("hides the timeline when none is available", () => {
+    render(<Receipt data={{ ...LOCKHEED_SEED, contractTimeline: null }} />);
+    expect(screen.queryByText(/tracked/i)).not.toBeInTheDocument();
+  });
+
   it("hides the stamp for private companies", () => {
     render(<Receipt data={{ ...LOCKHEED_SEED, isPrivate: true, revenue: null, federallyFed: null, perDollar: null }} />);
     expect(screen.queryByText("FEDERALLY FED")).not.toBeInTheDocument();

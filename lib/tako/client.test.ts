@@ -5,7 +5,15 @@ import {
   parseAnswerResponse,
   parseMagnitude,
   extractValueFromContent,
+  parseSeriesDescription,
 } from "./client";
+
+// The exact description string Tako returned for Lockheed (from production logs).
+const LOCKHEED_DESC =
+  "This is a time series line chart showing 1 series between Oct 1, 2007 and Oct 1, 2025. " +
+  "Lockheed Martin Corporation Federal Contract Obligations's latest value was $14.1B on Oct 1, 2025, " +
+  "down 62.1% since Oct 1, 2007, with a maximum of $76.1B on Oct 1, 2019 and a minimum of $14.1B on Oct 1, 2025. " +
+  "Source: U.S. Department of the Treasury.";
 import { TAKO_SEARCH_URL, TAKO_ANSWER_URL } from "@/lib/constants";
 
 describe("parseMagnitude", () => {
@@ -36,6 +44,39 @@ describe("extractValueFromContent", () => {
   it("returns null when content is missing or empty", () => {
     expect(extractValueFromContent(undefined).value).toBeNull();
     expect(extractValueFromContent({ format: "csv", data: "" }).value).toBeNull();
+  });
+});
+
+describe("parseSeriesDescription (real Tako prose)", () => {
+  it("extracts the latest value and the timeline from the Lockheed description", () => {
+    const { latest, timeline } = parseSeriesDescription(LOCKHEED_DESC);
+    expect(latest).toBe(14.1e9);
+    expect(timeline).toEqual({ startYear: 2007, endYear: 2025, peak: 76.1e9, peakYear: 2019 });
+  });
+  it("returns nulls for empty/missing descriptions", () => {
+    expect(parseSeriesDescription(undefined)).toEqual({ latest: null, timeline: null });
+    expect(parseSeriesDescription("no numbers here")).toEqual({ latest: null, timeline: null });
+  });
+});
+
+describe("parseSearchResponse — real chart card (content.data null, value in description)", () => {
+  it("reads the figure + timeline from description when content.data is null", () => {
+    const json = {
+      cards: [
+        {
+          card_id: "5SUQ1YgDQqNwXiuO9rjZ",
+          title: "Lockheed Martin Corporation Federal Contract Obligations",
+          description: LOCKHEED_DESC,
+          embed_url: "https://tako.com/embed/5SUQ1YgDQqNwXiuO9rjZ/",
+          content: { format: "csv", data: null },
+        },
+      ],
+      request_id: "r",
+    };
+    const r = parseSearchResponse(json);
+    expect(r.value).toBe(14.1e9);
+    expect(r.embedUrl).toBe("https://tako.com/embed/5SUQ1YgDQqNwXiuO9rjZ/");
+    expect(r.timeline).toEqual({ startYear: 2007, endYear: 2025, peak: 76.1e9, peakYear: 2019 });
   });
 });
 

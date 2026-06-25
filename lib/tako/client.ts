@@ -1,22 +1,58 @@
 import { TAKO_SEARCH_URL, TAKO_ANSWER_URL, TAKO_DEBUG } from "@/lib/constants";
-import type { Candidate, TakoClient, TakoSearchResult, TakoSource } from "./types";
+import type { Candidate, SeriesTimeline, TakoClient, TakoSearchResult, TakoSource } from "./types";
 
 // --- Real Tako v3 search response shape (docs.tako.com/api-reference/search-v3) ---
 // { cards: [ { card_id, title, description, embed_url, sources: [{source_name}],
-//             content: { format: "csv"|"text", data: "string", total_rows } } ],
-//   web_results: [...], request_id }
-// The numeric figure is NOT a time_series array — it lives inside content.data as a
-// CSV or plain-text string that we parse here.
+//             content: { format: "csv"|"text", data: string|null } } ], ... }
+//
+// IMPORTANT (confirmed from live data): for chart cards the search response does NOT
+// inline the numbers — `content.data` is null. The figures live in `description` as
+// prose, e.g.:
+//   "...latest value was $14.1B on Oct 1, 2025, down 62.1% since Oct 1, 2007, with a
+//    maximum of $76.1B on Oct 1, 2019 and a minimum of $14.1B on Oct 1, 2025."
+//   "...time series ... between Oct 1, 2007 and Oct 1, 2025."
+// So we parse `description` first, and only fall back to `content.data` when present.
 
 interface RawContent {
   format?: string;
-  data?: string;
+  data?: string | null;
 }
 interface RawCard {
   card_id?: string;
   title?: string;
+  description?: string;
   embed_url?: string;
   content?: RawContent;
+}
+
+// Pull the structured figures + timeline out of a chart card's prose description.
+export function parseSeriesDescription(desc: string | undefined | null): {
+  latest: number | null;
+  timeline: SeriesTimeline | null;
+} {
+  if (!desc || typeof desc !== "string") return { latest: null, timeline: null };
+
+  const MONEY = String.raw`-?\$?-?[\d,]+(?:\.\d+)?\s*(?:trillion|billion|million|thousand|t|tn|bn|b|mn|m|k)?`;
+  const DATE = String.raw`[A-Za-z]+\.?\s+\d{1,2},?\s+(\d{4})`;
+  const yearOf = (m: RegExpMatchArray | null, i: number) => (m ? parseInt(m[i], 10) : null);
+
+  const latestM = desc.match(new RegExp(`latest value was\\s+(${MONEY})`, "i"));
+  const latest = latestM ? parseMagnitude(latestM[1]) : null;
+
+  const rangeM = desc.match(new RegExp(`between\\s+${DATE}\\s+and\\s+${DATE}`, "i"));
+  const maxM = desc.match(new RegExp(`maximum of\\s+(${MONEY})\\s+on\\s+${DATE}`, "i"));
+
+  const startYear = yearOf(rangeM, 1);
+  const endYear = yearOf(rangeM, 2);
+  const peak = maxM ? parseMagnitude(maxM[1]) : null;
+  const peakYear = maxM ? parseInt(maxM[2], 10) : null;
+
+  const hasTimeline = startYear || endYear || peak;
+  const timeline: SeriesTimeline | null = hasTimeline
+    ? { startYear, endYear, peak, peakYear }
+    : null;
+
+  return { latest, timeline };
 }
 
 function logTako(...args: unknown[]): void {
@@ -99,15 +135,19 @@ export function extractValueFromContent(content: RawContent | undefined): {
 export function parseSearchResponse(json: unknown): TakoSearchResult {
   const cards = (json as { cards?: RawCard[] })?.cards ?? [];
   const top = cards[0];
-  const { value, candidates: nums } = extractValueFromContent(top?.content);
+
+  // Primary source: the prose `description`. Fallback: `content.data` (when present).
+  const fromDesc = parseSeriesDescription(top?.description);
+  const fromContent = extractValueFromContent(top?.content);
+  const value = fromDesc.latest ?? fromContent.value;
 
   logTako(
     "parsed search:",
     `cards=${cards.length}`,
     `topTitle=${JSON.stringify(top?.title ?? null)}`,
-    `format=${top?.content?.format ?? "none"}`,
     `value=${value}`,
-    `numbersSeen=[${nums.slice(0, 8).join(", ")}${nums.length > 8 ? ", …" : ""}]`,
+    `timeline=${JSON.stringify(fromDesc.timeline)}`,
+    `(content.data=${top?.content?.data == null ? "null" : "present"})`,
   );
 
   // The v3 shape does not expose alternative entities, so we don't synthesize
@@ -120,6 +160,7 @@ export function parseSearchResponse(json: unknown): TakoSearchResult {
     embedUrl: top?.embed_url ?? null,
     matched: null,
     candidates,
+    timeline: fromDesc.timeline,
   };
 }
 
@@ -141,7 +182,7 @@ export class HttpTakoClient implements TakoClient {
   }
 
   async searchValue(query: string): Promise<TakoSearchResult> {
-    const empty: TakoSearchResult = { value: null, embedUrl: null, matched: null, candidates: [] };
+    const empty: TakoSearchResult = { value: null, embedUrl: null, matched: null, candidates: [], timeline: null };
     try {
       logTako("search →", TAKO_SEARCH_URL, JSON.stringify({ query }));
       const res = await this.fetchImpl(TAKO_SEARCH_URL, {

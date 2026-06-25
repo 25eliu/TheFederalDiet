@@ -9,6 +9,7 @@ import {
   formatUSD2,
 } from "@/lib/format";
 import type { ReceiptData } from "@/lib/receipt/types";
+import type { SeriesTimeline } from "@/lib/tako/types";
 
 export function Receipt({ data }: { data: ReceiptData }) {
   const eyebrow = `THE FEDERAL DIET · RECEIPT · FY${data.fiscalYear} · NO.${data.receiptNo}`;
@@ -40,6 +41,8 @@ export function Receipt({ data }: { data: ReceiptData }) {
         <span className={styles.heroNum}>{formatCompactUSD(data.contracts)}</span>
         <span className={styles.heroLabel}>consumed in fed. contracts</span>
       </div>
+
+      <TimelineLine timeline={data.contractTimeline} />
 
       <Stamp percentLabel={stampLabel} />
 
@@ -83,6 +86,24 @@ export function Receipt({ data }: { data: ReceiptData }) {
 
       <Footer data={data} />
     </article>
+  );
+}
+
+function TimelineLine({ timeline }: { timeline: SeriesTimeline | null }) {
+  if (!timeline || (!timeline.startYear && !timeline.endYear)) return null;
+  const span =
+    timeline.startYear && timeline.endYear
+      ? `${timeline.startYear}–${timeline.endYear}`
+      : `${timeline.startYear ?? timeline.endYear}`;
+  const peak =
+    timeline.peak && timeline.peakYear
+      ? ` · peak ${formatCompactUSD(timeline.peak)} in ${timeline.peakYear}`
+      : "";
+  return (
+    <p className={styles.timeline}>
+      Federal contracts tracked {span}
+      {peak}
+    </p>
   );
 }
 
