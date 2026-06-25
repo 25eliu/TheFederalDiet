@@ -47,6 +47,7 @@ export function Receipt({ data }: { data: ReceiptData }) {
         <StatColumn
           title="Federal Contracts"
           rows={[
+            { label: "Contracts", value: formatCompactUSD(data.contracts) },
             { label: "Rank", value: data.rank ? `#${data.rank}` : "data unavailable" },
             { label: "Share of all fed.", value: formatPercent(data.shareOfFederal) },
           ]}

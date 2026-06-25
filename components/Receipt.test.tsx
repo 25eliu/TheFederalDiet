@@ -7,7 +7,7 @@ describe("Receipt", () => {
   it("renders the company, hero contract figure, eyebrow and stamp", () => {
     render(<Receipt data={LOCKHEED_SEED} />);
     expect(screen.getByText("Lockheed Martin")).toBeInTheDocument();
-    expect(screen.getByText("$14.1B")).toBeInTheDocument();
+    expect(screen.getAllByText("$14.1B").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/On the federal diet/i)).toBeInTheDocument();
     expect(screen.getByText("FEDERALLY FED")).toBeInTheDocument();
     expect(screen.getByText(/FY2025/)).toBeInTheDocument();
