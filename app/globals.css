@@ -23,6 +23,11 @@ body { margin: 0; background: #e7e3d6; color: var(--ink); font-family: var(--fon
 }
 .searchRow button:disabled { opacity: 0.6; cursor: progress; }
 :focus-visible { outline: 3px solid var(--stamp-red); outline-offset: 2px; }
+.ghLink {
+  position: fixed; top: 16px; right: 16px; z-index: 50; color: var(--ink);
+  display: inline-flex; opacity: 0.7; transition: opacity 0.15s ease;
+}
+.ghLink:hover { opacity: 1; }
 .status { text-align: center; font-size: 13px; }
 .status.error { color: var(--stamp-red); }
 .shareRow { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
