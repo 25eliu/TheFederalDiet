@@ -13,8 +13,23 @@ export class FakeTakoClient implements TakoClient {
 
   async searchValue(query: string): Promise<TakoSearchResult> {
     const q = query.toLowerCase();
-    const hit = (this.script.searches ?? []).find((s) => q.includes(s.match.toLowerCase()));
-    return hit ? { ...EMPTY, ...hit.result } : EMPTY;
+    const searches = this.script.searches ?? [];
+
+    // Round 1: exact substring match (fast path).
+    const exact = searches.find((s) => q.includes(s.match.toLowerCase()));
+    if (exact) return { ...EMPTY, ...exact.result };
+
+    // Round 2: strip the first word from multi-word match keys and retry.
+    // This lets scripts key on "<company> <domain terms>" while still matching
+    // queries whose company name differs (e.g. a "SecretCorp" query matching a
+    // "palantir federal contract" entry because "federal contract" is shared).
+    const fallback = searches.find((s) => {
+      const words = s.match.toLowerCase().split(/\s+/);
+      if (words.length < 2) return false;
+      const suffix = words.slice(1).join(" ");
+      return q.includes(suffix);
+    });
+    return fallback ? { ...EMPTY, ...fallback.result } : EMPTY;
   }
 
   async answer(): Promise<string | null> {
