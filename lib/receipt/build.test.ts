@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildReceipt, pickLatestCompleteFiscalYear, fiscalYearOfPoint } from "./build";
+import { buildReceipt, pickLatestCompleteFiscalYear, fiscalYearOfPoint, pickYearValue } from "./build";
 import { FakeTakoClient } from "@/lib/tako/fake";
 import { totalFederalContracts } from "@/lib/constants";
 
@@ -38,6 +38,21 @@ describe("pickLatestCompleteFiscalYear", () => {
   });
 });
 
+describe("pickYearValue", () => {
+  const series = [
+    { date: "2023-12-31", year: 2023, value: 67e9 },
+    { date: "2024-12-31", year: 2024, value: 71e9 },
+    { date: "2025-12-31", year: 2025, value: 75e9 },
+  ];
+  it("returns the exact calendar-year value", () => {
+    expect(pickYearValue(series, 2024)).toBe(71e9);
+  });
+  it("falls back to the most recent year at or below", () => {
+    expect(pickYearValue(series, 2026)).toBe(75e9);
+    expect(pickYearValue(series, 2019)).toBeNull();
+  });
+});
+
 describe("buildReceipt", () => {
   it("uses the latest complete FY, the constant denominator, and market cap", async () => {
     const r = await buildReceipt("Lockheed Martin", new FakeTakoClient(fullScript), 2025);
@@ -57,6 +72,37 @@ describe("buildReceipt", () => {
     const r = await buildReceipt("Lockheed Martin", new FakeTakoClient(fullScript), 2025);
     expect(r.shareOfFederal!).toBeLessThan(1);
     expect(r.perHundred!).toBeLessThan(100);
+  });
+
+  it("compares revenue from the SAME year as the contracts figure", async () => {
+    const script = {
+      searches: [
+        { match: "federal contract", result: { series: [
+          { date: "2024-10-01", year: 2024, value: 48e9 }, // FY2025
+        ] } },
+        { match: "annual revenue", result: { value: 75e9, series: [
+          { date: "2024-12-31", year: 2024, value: 71e9 },
+          { date: "2025-12-31", year: 2025, value: 75e9 }, // FY2025 → use this
+        ] } },
+      ],
+    };
+    const r = await buildReceipt("Lockheed Martin", new FakeTakoClient(script), 2025);
+    expect(r.fiscalYear).toBe(2025);
+    expect(r.contracts).toBe(48e9);
+    expect(r.revenue).toBe(75e9); // 2025 revenue, matched to the FY2025 contracts year
+    expect(r.federallyFed!).toBeCloseTo(48 / 75, 4);
+  });
+
+  it("caps federally-fed at 100% when contracts exceed revenue", async () => {
+    const script = {
+      searches: [
+        { match: "federal contract", result: { series: [{ date: "2024-10-01", year: 2024, value: 80e9 }] } },
+        { match: "annual revenue", result: { series: [{ date: "2025-12-31", year: 2025, value: 75e9 }] } },
+      ],
+    };
+    const r = await buildReceipt("Lockheed Martin", new FakeTakoClient(script), 2025);
+    expect(r.federallyFed).toBe(1); // not 1.067
+    expect(r.perDollar).toBe(1);
   });
 
   it("falls back to the description latest value when no series is returned", async () => {

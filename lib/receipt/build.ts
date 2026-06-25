@@ -47,16 +47,33 @@ const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 };
 
-// Pick the value for the most recent fiscal year that has fully ended as of `asOfFy`
-// (the current in-progress FY is excluded). Returns null if the series is empty.
-export function pickLatestCompleteFiscalYear(series: SeriesPoint[], asOfFy: number): number | null {
+// The most recent fiscal year that has fully ended as of `asOfFy` (the current
+// in-progress FY is excluded), with its value. Null if the series is empty.
+export function pickLatestCompleteFiscalYearEntry(
+  series: SeriesPoint[],
+  asOfFy: number,
+): { fy: number; value: number } | null {
   if (!series.length) return null;
   const complete = series
     .map((p) => ({ fy: fiscalYearOfPoint(p), value: p.value }))
     .filter((p) => p.fy <= asOfFy);
   if (!complete.length) return null;
   complete.sort((a, b) => a.fy - b.fy);
-  return complete[complete.length - 1].value;
+  return complete[complete.length - 1];
+}
+
+export function pickLatestCompleteFiscalYear(series: SeriesPoint[], asOfFy: number): number | null {
+  return pickLatestCompleteFiscalYearEntry(series, asOfFy)?.value ?? null;
+}
+
+// Value for a specific calendar year (used to align revenue to the contracts year):
+// exact year match, else the most recent year at or below it. Null if none.
+export function pickYearValue(series: SeriesPoint[], year: number): number | null {
+  if (!series.length) return null;
+  const exact = series.find((p) => p.year === year);
+  if (exact) return exact.value;
+  const below = series.filter((p) => p.year <= year).sort((a, b) => a.year - b.year);
+  return below.length ? below[below.length - 1].value : null;
 }
 
 export async function buildReceipt(
@@ -90,9 +107,11 @@ export async function buildReceipt(
     // All five calls fire in parallel — every query keys off the original company name
     // (the v3 shape exposes no clean "matched" entity), so nothing needs to await the
     // contracts result first. Wall-clock ≈ the slowest single call.
+    // Contracts and revenue both request the full series so we can compare the SAME
+    // fiscal year rather than mismatched "latest value" points.
     const [contractRes, revenueRes, netIncomeRes, marketCapRes, explanation] = await Promise.all([
       client.searchValue(queries.contracts(company, fiscalYear), { includeContents: true }),
-      client.searchValue(queries.revenue(company)),
+      client.searchValue(queries.revenue(company), { includeContents: true }),
       client.searchValue(queries.netIncome(company)),
       client.searchValue(queries.marketCap(company)),
       client.answer(queries.explanation(company), ["tako", "web"]),
@@ -101,10 +120,11 @@ export async function buildReceipt(
     const candidates = contractRes.candidates;
     const takoEmbedUrl = contractRes.embedUrl;
 
-    // Prefer the latest COMPLETE fiscal year from the full series; fall back to the
-    // description's "latest value" only when contents weren't returned.
-    const contracts =
-      pickLatestCompleteFiscalYear(contractRes.series, fiscalYear) ?? contractRes.value;
+    // The comparison year: the latest COMPLETE fiscal year present in the contracts
+    // series. Everything (revenue, denominator, label) is aligned to this one year.
+    const contractEntry = pickLatestCompleteFiscalYearEntry(contractRes.series, fiscalYear);
+    const contracts = contractEntry?.value ?? contractRes.value;
+    const year = contractEntry?.fy ?? fiscalYear;
 
     if (contracts === null || contracts === 0) {
       if (candidates.length > 1) {
@@ -113,16 +133,24 @@ export async function buildReceipt(
       return { ...base, status: "no-contracts", candidates, takoEmbedUrl };
     }
 
-    const total = configuredTotal(fiscalYear);
+    // Revenue for the SAME year (fall back to the description latest if no series).
+    const revenue = pickYearValue(revenueRes.series, year) ?? revenueRes.value;
+    const total = configuredTotal(year);
     const share = shareOfFederal(contracts, total);
-    const fed = federallyFed(contracts, revenueRes.value);
+
+    // Federally fed = federal contracts as a share of that year's revenue. It cannot
+    // exceed 100% (a company can't take in more federal money than its total revenue),
+    // so cap it — obligations can edge above revenue in big-award years.
+    const fedRaw = federallyFed(contracts, revenue);
+    const fed = fedRaw === null ? null : Math.min(1, fedRaw);
     const marketCap = parseMarketCap(marketCapRes.description) ?? marketCapRes.value;
 
     return {
       ...base,
+      fiscalYear: year,
       contracts,
       totalFederalContracts: total,
-      revenue: revenueRes.value,
+      revenue,
       netIncome: netIncomeRes.value,
       marketCap,
       shareOfFederal: share,
@@ -130,7 +158,7 @@ export async function buildReceipt(
       perHundred: perHundred(share),
       perDollar: perDollar(fed),
       explanation,
-      isPrivate: revenueRes.value === null,
+      isPrivate: revenue === null,
       contractTimeline: contractRes.timeline,
       candidates,
       takoEmbedUrl,
