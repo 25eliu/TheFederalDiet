@@ -2,13 +2,9 @@ import styles from "./receipt.module.css";
 import { Stamp } from "./Stamp";
 import { LedgerLine } from "./LedgerLine";
 import { StatColumn } from "./StatColumn";
-import {
-  formatCompactUSD,
-  formatPercent,
-  formatSignedPercent,
-  formatUSD2,
-} from "@/lib/format";
+import { formatCompactUSD, formatPercent, formatUSD2 } from "@/lib/format";
 import type { ReceiptData } from "@/lib/receipt/types";
+import type { SeriesTimeline } from "@/lib/tako/types";
 
 export function Receipt({ data }: { data: ReceiptData }) {
   const eyebrow = `THE FEDERAL DIET · RECEIPT · FY${data.fiscalYear} · NO.${data.receiptNo}`;
@@ -41,6 +37,8 @@ export function Receipt({ data }: { data: ReceiptData }) {
         <span className={styles.heroLabel}>consumed in fed. contracts</span>
       </div>
 
+      <TimelineLine timeline={data.contractTimeline} />
+
       <Stamp percentLabel={stampLabel} />
 
       <div className={styles.columns}>
@@ -48,7 +46,6 @@ export function Receipt({ data }: { data: ReceiptData }) {
           title="Federal Contracts"
           rows={[
             { label: "Contracts", value: formatCompactUSD(data.contracts) },
-            { label: "Rank", value: data.rank ? `#${data.rank}` : "data unavailable" },
             { label: "Share of all fed.", value: formatPercent(data.shareOfFederal) },
           ]}
         />
@@ -57,11 +54,7 @@ export function Receipt({ data }: { data: ReceiptData }) {
           rows={[
             { label: "Revenue", value: formatCompactUSD(data.revenue) },
             { label: "Net income", value: formatCompactUSD(data.netIncome) },
-            {
-              label: "Stock 1-yr",
-              value: formatSignedPercent(data.stockChange1y),
-              tone: data.stockChange1y === null ? undefined : data.stockChange1y >= 0 ? "up" : "down",
-            },
+            { label: "Market cap", value: formatCompactUSD(data.marketCap) },
           ]}
         />
       </div>
@@ -83,6 +76,24 @@ export function Receipt({ data }: { data: ReceiptData }) {
 
       <Footer data={data} />
     </article>
+  );
+}
+
+function TimelineLine({ timeline }: { timeline: SeriesTimeline | null }) {
+  if (!timeline || (!timeline.startYear && !timeline.endYear)) return null;
+  const span =
+    timeline.startYear && timeline.endYear
+      ? `${timeline.startYear}–${timeline.endYear}`
+      : `${timeline.startYear ?? timeline.endYear}`;
+  const peak =
+    timeline.peak && timeline.peakYear
+      ? ` · peak ${formatCompactUSD(timeline.peak)} in ${timeline.peakYear}`
+      : "";
+  return (
+    <p className={styles.timeline}>
+      Federal contracts tracked {span}
+      {peak}
+    </p>
   );
 }
 
