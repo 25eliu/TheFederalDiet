@@ -5,6 +5,9 @@ import type { TakoClient } from "@/lib/tako/types";
 import type { ReceiptData } from "./types";
 
 // Centralized query phrasing — tests and the live verifier must agree on these.
+// Query phrasing. Tests and the live verifier must agree on these. The optimal
+// wording is determined EMPIRICALLY by scripts/probe-tako.mjs against the live API —
+// update `contracts`/`total` to the winning phrasing once the probe has run.
 export const queries = {
   contracts: (c: string, fy: number) => `${c} federal contract obligations FY${fy}`,
   total: (fy: number) => `total US federal contract obligations FY${fy}`,
