@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function SearchBox({
   onSearch,
@@ -11,6 +11,9 @@ export function SearchBox({
   initial: string;
 }) {
   const [value, setValue] = useState(initial);
+  useEffect(() => {
+    setValue(initial);
+  }, [initial]);
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = value.trim();

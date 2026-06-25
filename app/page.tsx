@@ -26,6 +26,7 @@ export default function Home() {
     }
     try {
       const res = await fetch(`/api/receipt?company=${encodeURIComponent(company)}`);
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const data: ReceiptData = await res.json();
       setView({ kind: "data", data });
     } catch {
