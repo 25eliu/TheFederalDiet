@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Archivo_Black, JetBrains_Mono, Spectral } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const display = Archivo_Black({ weight: "400", subsets: ["latin"], variable: "--font-display" });
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </svg>
         </a>
         {children}
+        <Analytics />
       </body>
     </html>
   );
